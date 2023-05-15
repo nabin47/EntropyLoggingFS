@@ -48,11 +48,7 @@ class EntropyLoggingFS(Operations):
     
     def _log_metrics(self, path, entropy, block_frequency_p_value, chi_square):
         with open("metrics_log.txt", "a") as f:
-            f.write(f"{path}: Entropy={entropy}, Block Frequency p-value={block_frequency_p_value}, Chi-square={chi_square}\n")
-
-    # def _log_entropy(self, path, entropy):
-    #     with open("entropy_log.txt", "a") as f:
-    #         f.write(f"{path}: {entropy}\n")
+            f.write(f"{path},{entropy},{block_frequency_p_value},{chi_square}\n")
 
     def getattr(self, path, fh=None):
         full_path = self._full_path(path)
@@ -91,12 +87,19 @@ class EntropyLoggingFS(Operations):
         with open(full_path, 'rb+') as f:
             f.seek(offset)
             f.write(data)
+            f.flush()
         os.lseek(fh, offset, os.SEEK_SET)
         os.write(fh, data)
-        entropy = self._calculate_entropy(data)
-        block_frequency_p_value = self._block_frequency_test(format(int.from_bytes(data, 'big'), '08b'))
-        chi_square = self._calculate_chi_square(data)
-        self._log_metrics(full_path, entropy, block_frequency_p_value, chi_square)
+        
+        # calculate metrics only once for the whole file
+        if offset == 0:
+            with open(full_path, 'rb') as f:
+                file_data = f.read()
+            entropy = self._calculate_entropy(file_data)
+            block_frequency_p_value = self._block_frequency_test(format(int.from_bytes(file_data, 'big'), '08b'))
+            chi_square = self._calculate_chi_square(file_data)
+            self._log_metrics(full_path, entropy, block_frequency_p_value, chi_square)
+        
         return len(data)
 
     def unlink(self, path):
